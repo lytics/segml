@@ -7,7 +7,7 @@ lioapi <- setRefClass("lioapi",
 	),
 	methods = list(
 		initialize = function() {
-			lioapi <<- Sys.getenv("LIOAPI")
+			lioapi <<- "https://api.lytics.io"
 			lioaid <<- as.integer(Sys.getenv("LIOAID"))
 			liokey <<- Sys.getenv("LIOKEY")
 		},
