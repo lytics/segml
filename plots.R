@@ -3,6 +3,7 @@ library(reshape2)
 library(dplyr)
 library(ggplot2)
 library(stringr)
+library(purrr)
 
 lytics_colors <- c(
 	"brightblue"  = "#0093D0",
@@ -196,21 +197,27 @@ plot.importance <- function(models, model.name, method = c("cloud", "gini"), thr
 
 	model <- models[[model.name]]
 
-	importance <- unlist(model$importance)
-	if(method == "gini") {
-		importance <- sort(unlist(lapply(lapply(model$threshold_distribution, unlist), sum)), decreasing = TRUE)
+	if(!is.null(model$features)) {
+		importance.df <- data.frame(
+			name = map_chr(model$features, ~ .x$name),
+			value = map_dbl(model$features, ~ .x$importance),
+			type = map_chr(model$features, ~ .x$kind)
+		)
+		importance.df <- importance.df[importance.df$value > threshold,]
+	} else {
+		importance <- unlist(model$importance)
+		importance <- importance[importance > threshold]
+
+		splits <- strsplit(names(importance), "_")
+		types <- unlist(lapply(splits, split.parts, category = "type"))
+		name <- gsub("NA ", "", unlist(lapply(splits, split.parts, category = "name")))
+
+		importance.df <- data.frame(
+			name = name,
+			value = importance,
+			type = types
+		)
 	}
-	importance <- importance[importance > threshold]
-
-	splits <- strsplit(names(importance), "_")
-	types <- unlist(lapply(splits, split.parts, category = "type"))
-	name <- gsub("NA ", "", unlist(lapply(splits, split.parts, category = "name")))
-
-	importance.df <- data.frame(
-		name = name,
-		value = importance,
-		type = types
-	)
 
 	importance.sorted.df <- transform(importance.df, name = reorder(name, value))
 

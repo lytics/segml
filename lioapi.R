@@ -74,7 +74,6 @@ lioapi <- setRefClass("lioapi",
 		},
 		set.credentials = function(aid, key) {
 			aid <- as.integer(aid)
-			
 			lioaid <<- aid
 			liokey <<- key
 
@@ -183,6 +182,10 @@ lioapi <- setRefClass("lioapi",
 			}
 
 			return(.self$post.work("cab095c2772947fb9206f7334a5c2398", config))
+		},
+		post.work = function(workflow.id, config, ...) {
+			body <- list(workflow_id = workflow.id, config = config, ...)
+			return(.self$exec("api/work", params = list(), body = body, method = "POST"))
 		}
 	)
 )
@@ -196,3 +199,27 @@ check.value <- function(x, key, value, presume = FALSE, as = identity, op = `==`
 }
 
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+
+is.empty <- function(obj, key = NULL) {
+	if(!is.null(key)) {
+		obj <- obj[[key]]
+	}
+
+	if(is.null(obj)) {
+		return(TRUE)
+	}
+
+	if(is.na(obj)) {
+		return(TRUE)
+	}
+
+	if(is.character(obj)) {
+		return(nchar(obj) == 0)
+	}
+
+	if(is.numeric(obj)) {
+		return(obj == 0)
+	}
+
+	return(FALSE)
+}
