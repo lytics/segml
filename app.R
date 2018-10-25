@@ -213,7 +213,12 @@ server <- function(input, output) {
 
 	existing.models <- reactive({
 		data <- account.data()
-		models <- api$get.segment.predictions()
+		model.list <- api$get.segment.predictions()
+ 		# convert the array to a list/map
+		models <- list()
+		for (model in model.list) {
+			models[[model$name]] = model
+		}
 		return(models)
 	})
 
