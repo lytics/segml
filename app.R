@@ -136,6 +136,14 @@ ui <- dashboardPage(
 								# input for the existing models
 								uiOutput("modelInputs"),
 
+								# button to generate insight report from model
+								actionButton("buildReport", "Generate Insight Report"),
+								uiOutput("reportOutput"),
+
+								# button to evaluate model to entities
+								actionButton("evaluateModel", "Score Users"),
+								uiOutput("evaluateOutput"),
+
 								# big model title
 								uiOutput("modelTitle"),
 
@@ -321,6 +329,39 @@ server <- function(input, output) {
 		))
 	})
 
+	build.report <- eventReactive(input$buildReport, {
+		tokenResponse <- api$create.token(
+			scopes = c("admin", "report_manager"),
+			name = "audience insight report creation token",
+			label = "audience insight report creation token",
+			expiry = "1h"
+		)
+
+		key <- tokenResponse$config[[1]]$value
+		if (is.null(key)) {
+			stop("could not get report_manager key")
+		}
+
+		models <- existing.models()
+		model <- models[[input$model]]
+		if (is.null(model$conf)) {
+			stop(sprintf("model %s has no saved config", input$model))
+		}
+
+		return(api$post.audience.report(
+			key= key,
+			target = model$conf$target$id,
+			source = model$conf$source$id,
+			modelId = input$model,
+			label = sprintf("From %s to %s", model$conf$target$slug_name, model$conf$source$slug_name),
+			description = sprintf(
+				"This report provides insights into how you can identify %s users who are likely to transition to %s",
+				model$conf$target$name,
+				model$conf$source$name
+			)
+		))
+	})
+
 	model.predictions <- reactive({
 		info <- api$get.fieldinfo(c(sprintf("segment_prediction.%s", input.model())))
 		return(info$fields[[1]])
@@ -476,6 +517,11 @@ server <- function(input, output) {
 	output$evaluateOutput <- renderUI({
 		model <- evaluate.model()
 		pre(RJSONIO::toJSON(model, pretty = TRUE))
+	})
+
+	output$reportOutput <- renderUI({
+		report <- build.report()
+		pre(RJSONIO::toJSON(report, pretty = TRUE))
 	})
 
 	output$modelTitle <- renderUI({

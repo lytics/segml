@@ -186,6 +186,30 @@ lioapi <- setRefClass("lioapi",
 		post.work = function(workflow.id, config, ...) {
 			body <- list(workflow_id = workflow.id, config = config, ...)
 			return(.self$exec("api/work", params = list(), body = body, method = "POST"))
+		},
+		post.audience.report = function(target = "", source = "", modelId = "", label = "", description = "", key="") {
+			config <- list(
+				label = label,
+				description = description,
+				audiences = list(
+					source = list(id = source),
+					target = list(id = target)
+				),
+				segml_model_id = modelId
+			)
+			return(.self$post("api/report", body = config, params = list(account_id = .self$account$id, key= key)))
+		},
+		create.token = function(scopes = c(), name = "", label="", expiry="") {
+			config <- list(
+				name = name,
+				label = label,
+				expires = expiry,
+				scopes = scopes
+			)
+			return (.self$exec("api/auth/createtoken", method = "POST", body = config, params = list(
+				account_id = .self$account$id,
+				auth_type = "api_token"
+			)))
 		}
 	)
 )
