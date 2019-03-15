@@ -197,7 +197,10 @@ lioapi <- setRefClass("lioapi",
 				),
 				segml_model_id = modelId
 			)
-			return(.self$post("api/report", body = config, params = list(account_id = .self$account$id, key= key)))
+
+			url <- sprintf("%s/api/report", .self$lioapi)
+			response <- .self$post(url, body = config, params = list(account_id = .self$account$id, key= key))
+			return(response$data)
 		},
 		create.token = function(scopes = c(), name = "", label="", expiry="") {
 			config <- list(
