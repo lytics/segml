@@ -353,11 +353,11 @@ server <- function(input, output) {
 			target = model$conf$target$id,
 			source = model$conf$source$id,
 			modelId = input$model,
-			label = sprintf("From %s to %s", model$conf$target$slug_name, model$conf$source$slug_name),
+			label = sprintf("From %s to %s", model$conf$source$name, model$conf$target$name),
 			description = sprintf(
 				"This report provides insights into how you can identify %s users who are likely to transition to %s",
-				model$conf$target$name,
-				model$conf$source$name
+				model$conf$source$slug_name,
+				model$conf$target$slug_name
 			)
 		))
 	})
