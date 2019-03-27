@@ -84,6 +84,9 @@ ui <- dashboardPage(
 								# should the model use scores?
 								checkboxInput("use_scores", "Use Scores?", value = TRUE),
 
+								# should the model use content?
+								checkboxInput("use_content", "Use Content?", value = TRUE),
+
 								# should we just build the model?
 								checkboxInput("build_only", "Build Only?", value = TRUE),
 
@@ -293,6 +296,7 @@ server <- function(input, output) {
 			aspects = input$collections,
 			fields = fields,
 			use_scores = input$use_scores,
+			use_content = input$use_content,
 			build_only = input$build_only,
 			save_segment = input$save_segment,
 			tune_model = input$tune_model,
