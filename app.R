@@ -96,6 +96,9 @@ ui <- dashboardPage(
 								# should we tune the model?
 								checkboxInput("tune_model", "Tune Model", value = FALSE),
 
+								# should we recreate the model weekly?
+								checkboxInput("re_run", "Rebuild the Model Weekly?", value = FALSE),
+
 								# tags for insights
 								textInput("tags", "Tags: ", value = ""),
 
@@ -301,7 +304,8 @@ server <- function(input, output) {
 			save_segment = input$save_segment,
 			tune_model = input$tune_model,
 			size = input$samplesize,
-			tags = tags
+			tags = tags,
+			re_run = input$re_run
 		))
 	})
 
