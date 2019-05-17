@@ -37,7 +37,7 @@ lytics_theme <- function() {
 	theme_bw(base_size = 12) +
 
 	# use proxima nova
-	theme(text = element_text(family = "Proxima Nova")) +
+	theme(text = element_text(family = "Helvetica")) +
 	theme(plot.title = element_text(size = 18, face = "bold")) +
 
 	# Set the entire chart region to a light gray color
@@ -190,6 +190,18 @@ plot.partial.dependencies <- function(resp) {
 
 	p <- ggplot(clean, aes(x = value, y = pred, colour = field)) + geom_line(size = 1.5)
 	return(p)
+}
+
+importance.table <- function(models, model.name) {
+	model <- models[[model.name]]
+	df <- data.frame(
+		name = map_chr(model$features, ~ .x$name),
+		importance = map_dbl(model$features, ~ .x$importance),
+		type = map_chr(model$features, ~ .x$kind),
+		lift = map_dbl(model$features, ~ .x$impact$lift),
+		correlation = map_dbl(model$features, ~ .x$correlation)
+	)
+	return (df[rev(order(df$importance)), ])
 }
 
 plot.importance <- function(models, model.name, method = c("cloud", "gini"), threshold = 0) {
