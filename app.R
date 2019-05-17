@@ -33,7 +33,7 @@ ui <- dashboardPage(
 		)
 	),
 	dashboardBody(
-		tags$head(tags$style(HTML('body, .main-header .logo, .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {font-family: "Proxima Nova", "Helvetica Neue", sans-serif !important;} .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 { font-weight: 800; } .skin-blue .left-side, .skin-blue .main-sidebar, .skin-blue .wrapper { background-color: #262d37; }'))),
+		tags$head(tags$style(HTML('body, .main-header .logo, .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {font-family: "Helvetica Neue", sans-serif !important;} .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 { font-weight: 800; } .skin-blue .left-side, .skin-blue .main-sidebar, .skin-blue .wrapper { background-color: #262d37; }'))),
 		tags$head(tags$style(HTML('.wrapper { overflow: visible !important; }'))),
 		# title header and filters
 		fluidRow(
@@ -162,8 +162,10 @@ ui <- dashboardPage(
 								infoBoxOutput("modelSpecificity"),
 								infoBoxOutput("modelSensitivity"),
 
-								# importance plot
-								plotOutput("importancePlot")
+								tabsetPanel(type = "tabs",
+									tabPanel("Plot", plotOutput("importancePlot")),
+									tabPanel("Table", tableOutput("importanceTable"))
+								)
 							)
 						)
 					),
@@ -474,13 +476,14 @@ server <- function(input, output) {
 		print(p)
 	}, height = 700, res = 108)
 
+	output$importanceTable <- renderTable({
+		importance.table(existing.models(), input$model)
+	}, width = "auto", striped=TRUE, align='c')
 
 	output$predictionPlot <- renderPlot({
 		fi <- prepare.fieldinfo(api, paste0("prediction_", remove.model.gen(input.model())), "all")
 		ggplot(fi, aes(x = value, y = count)) + geom_bar(stat = "identity") + labs(x = "Target Prediction", y = "User Count", title = "SegmentML Prediction Distribution")
 	})
-
-
 
 	output$sourceDistribution <- renderPlot({
 		parsed.name <- parse.model.name(input.model())
