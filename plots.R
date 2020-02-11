@@ -192,14 +192,28 @@ plot.partial.dependencies <- function(resp) {
 	return(p)
 }
 
+extract.dbl <- function(x, default = 0, digits = 4) {
+	if(is.null(x) || length(x) == 0) {
+		return(default)
+	}
+	return(round(x, digits))
+}
+
+extract.chr <- function(x, default = "") {
+	if(is.null(x) || length(x) == 0) {
+		return(default)
+	}
+	return(x)
+}
+
 importance.table <- function(models, model.name) {
 	model <- models[[model.name]]
 	df <- data.frame(
-		name = map_chr(model$features, ~ .x$name),
-		importance = map_dbl(model$features, ~ .x$importance),
-		type = map_chr(model$features, ~ .x$kind),
-		lift = map_dbl(model$features, ~ .x$impact$lift),
-		correlation = map_dbl(model$features, ~ .x$correlation)
+		name = map_chr(model$features, ~ extract.chr(.x$name)),
+		importance = map_dbl(model$features, ~ extract.dbl(.x$importance)),
+		type = map_chr(model$features, ~ extract.chr(.x$kind)),
+		lift = map_dbl(model$features, ~ extract.dbl(.x$impact$lift)),
+		correlation = map_dbl(model$features, ~ extract.dbl(.x$correlation))
 	)
 	return (df[rev(order(df$importance)), ])
 }

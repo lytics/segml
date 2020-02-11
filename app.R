@@ -1,5 +1,6 @@
 library(shiny)
 library(shinydashboard)
+library(shinyWidgets)
 
 library(ggplot2)
 library(grid)
@@ -19,8 +20,13 @@ ui <- dashboardPage(
 	dashboardSidebar(
 		textInput("lioAid", "Lytics Account ID", value = Sys.getenv("LIOAID"), placeholder = "(e.g. 1234)"),
 		textInput("lioKey", "Lytics API Key", value = Sys.getenv("LIOKEY"), placeholder = "(e.g. aibBQUvU8cz39jmqo0j6tQxx)"),
-		div(class = "form-group shiny-input-container",
-			actionButton("credentials", "Update!", class = "btn-primary", style = "margin: 0; color: #fff;")
+		div(class = "form-group shiny-input-container", style = "height: 60px;",
+			div(style = "float: left;",
+				actionButton("credentials", "Update!", class = "btn-primary", style = "margin: 0; color: #fff;")
+			),
+			div(style = "float: right;",
+				actionButton("refresh", "Reload", class = "btn-primary", icon = icon("redo"), style = "margin: 0; color: #fff;")
+			)
 		),
 		br(),
 		div(class = "form-group shiny-input-container",
@@ -35,6 +41,8 @@ ui <- dashboardPage(
 	dashboardBody(
 		tags$head(tags$style(HTML('body, .main-header .logo, .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {font-family: "Helvetica Neue", sans-serif !important;} .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 { font-weight: 800; } .skin-blue .left-side, .skin-blue .main-sidebar, .skin-blue .wrapper { background-color: #262d37; }'))),
 		tags$head(tags$style(HTML('.wrapper { overflow: visible !important; }'))),
+		tags$head(tags$style(HTML('#shiny-notification-panel { width: 650px; } tfoot { display: none; } #modelTitle { font-weight: 800; font-size: 24px; line-height: 48px; padding-left: 0.5em;} .btn-dropdown-input { float: left; } '))),
+		tags$head(tags$style(HTML('.denominator { font-size: 0.5em; bottom: 0.25em; position: relative; opacity: 0.7; }'))),
 		# title header and filters
 		fluidRow(
 			style = "margin-top: -36px",
@@ -137,61 +145,63 @@ ui <- dashboardPage(
 						# plots and output
 						box(width = 12, height = "1300px",
 							tags$div(
-								tags$h2("Model Summary"),
+								# existing models
+								fluidRow(
+									column(12,
+										dataTableOutput("modelsTable")
+									)
+								),
+								fluidRow(
+									column(12,
+										# input for the existing models
+										uiOutput("modelInputs"),
 
-								# input for the existing models
-								uiOutput("modelInputs"),
+										# big model title
+										div(style = "padding-bottom: 1em;",
+											uiOutput("modelTitle", inline = TRUE),
+											dropdownButton(icon = icon("gear"), label = "Advanced Options", tooltip = TRUE,
+												# button to generate insight report from model
+												actionButton("buildReport", "Generate Insight Report", icon = icon("chart-pie")),
+												uiOutput("reportOutput"),
 
-								# button to generate insight report from model
-								actionButton("buildReport", "Generate Insight Report"),
-								uiOutput("reportOutput"),
+												# button to evaluate model to entities
+												actionButton("evaluateModel", "Score Users", icon = icon("users")),
+												uiOutput("evaluateOutput"),
 
-								# button to evaluate model to entities
-								actionButton("evaluateModel", "Score Users"),
-								uiOutput("evaluateOutput"),
+												# show model configs
+												actionButton("showModel", "Toggle Model Config", icon = icon("search-plus")),
+												uiOutput("showModel")
+											)
+										),
 
-								# big model title
-								uiOutput("modelTitle"),
+										# infobox for accuracy metrics
+										fluidRow(
+											column(12,
+												infoBoxOutput("modelError", 4),
+												infoBoxOutput("modelSpecificity", 4),
+												infoBoxOutput("modelSensitivity", 4)
+											)
+										),
+										fluidRow(
+											column(12,
+												infoBoxOutput("modelAccuracy", 4),
+												infoBoxOutput("modelReach", 4),
+												infoBoxOutput("modelHealth", 4)
+											)
+										),
 
-								# show model configs
-								actionButton("showModel", "Toggle Model Config", icon = icon("search-plus")),
-								uiOutput("showModel"),
-
-								# infobox for accuracy metrics
-								infoBoxOutput("modelAccuracy"),
-								infoBoxOutput("modelSpecificity"),
-								infoBoxOutput("modelSensitivity"),
-
-								tabsetPanel(type = "tabs",
-									tabPanel("Plot", plotOutput("importancePlot")),
-									tabPanel("Table", tableOutput("importanceTable"))
+										tabBox(title = "", width = "100%;",
+										#tabsetPanel(type = "tabs",
+											tabPanel("Plot", plotOutput("importancePlot")),
+											tabPanel("Table", dataTableOutput("importanceTable"))
+										)
+									)
 								)
 							)
 						)
 					),
 					fluidRow(
 						box(width = 12,
-							fluidRow(
-								column(12,
-									uiOutput("modelField")
-								)
-							),
-							fluidRow(
-								column(6,
-									plotOutput("sourceDistribution")
-								),
-								column(6,
-									plotOutput("targetDistribution")
-								)
-							),
-							fluidRow(
-								column(6,
-									plotOutput("predictionPlot")
-								),
-								column(6,
-									plotOutput("partialDepdencies")
-								)
-							),
 							fluidRow(
 								column(6,
 									plotOutput("fakeRocPlot")
@@ -217,8 +227,14 @@ server <- function(input, output) {
 	# lytics api (lioapi) client to use for all API requests
 	api <- lioapi$new()
 
+	notificationIds <- list()
+
 	account.data <- eventReactive(input$credentials, {
 		return(api$set.credentials(input$lioAid, input$lioKey))
+	})
+
+	account.refresh <- eventReactive(input$refresh, {
+		return(account.data())
 	})
 
 	segment.data <- reactive({
@@ -388,6 +404,34 @@ server <- function(input, output) {
 		paste0(api$account$name, " (", api$account$aid, ")")
 	})
 
+	model.table <- reactive({
+		models <- existing.models()
+		return(data.frame(
+			Name = map_chr(models, ~ .x$name),
+			Health = map_chr(models, ~ .x$summary$model_health),
+			Accuracy = map_dbl(models, ~ .x$summary$accuracy),
+			Reach = map_dbl(models, ~ .x$summary$reach)
+		))
+	})
+
+	observeEvent(input$model, {
+		models <- existing.models()
+		model <- models[[input.model()]]
+
+		if(length(notificationIds) > 0) {
+			lapply(notificationIds, removeNotification)
+		}
+		notificationIds <<- lapply(model$summary$msgs, function(msg){
+			type <- "warning"
+			if(tolower(msg$severity) == "warn") {
+				type <- "error"
+			}
+			showNotification(msg$text, duration = NULL, closeButton = TRUE, type = type)
+		})
+	})
+
+	output$modelsTable <- renderDataTable(model.table(), options = list(pageLength = 5, dom = "tp"))
+
 	model.fieldinfo <- reactive({
 		models <- existing.models()
 		model <- models[[input.model()]]
@@ -422,42 +466,57 @@ server <- function(input, output) {
 		selectInput("model", "Choose an existing model", choices = model.slugs, selected = model.slugs[1])
 	})
 
-	output$modelField <- renderUI({
-		models <- existing.models()
-		model <- models[[input.model()]]
-
-		imp.order <- order(as.numeric(unlist(model$importance)), decreasing = TRUE)
-		imp.names <- unique(gsub("\\:\\:.+", "", names(model$importance)[imp.order]))
-
-		selectInput("modelField", "Choose a field in the model", imp.names)
-
-		imp.order <- order(as.numeric(unlist(model$importance)), decreasing = TRUE)
-		imp.names <- unique(gsub("\\:\\:.+", "", names(model$importance)[imp.order]))
-
-		selectInput("modelField", "Choose a field in the model", imp.names)
-	})
-
-	output$modelAccuracy <- renderInfoBox({
+	output$modelError <- renderInfoBox({
 		models <- existing.models()
 		model.name <- input.model()
-		infoBox(
-			"Model Fuzziness:", paste0(round(1 - accuracy(models[[model.name]]), 4) * 100, "%"), icon = icon("dashboard"), color = "blue", fill = TRUE
+		valueBox(
+			paste0(round(1 - accuracy(models[[model.name]]), 4) * 100, "%"), "Overall Error Rate", icon = icon("times"), color = "blue" #, fill = TRUE
 		)
 	})
 
 	output$modelSensitivity <- renderInfoBox({
 		models <- existing.models()
 		model.name <- input.model()
-		infoBox(
-			"False Negative", paste0(round(1 - sensitivity(models[[model.name]]), 4) * 100, "%"), icon = icon("dashboard"), color = "purple", fill = TRUE
+		valueBox(
+			paste0(round(1 - sensitivity(models[[model.name]]), 4) * 100, "%"), "False Negative", icon = icon("user-minus"), color = "purple" #, fill = TRUE
 		)
 	})
 
 	output$modelSpecificity <- renderInfoBox({
 		models <- existing.models()
 		model.name <- input.model()
-		infoBox(
-			"False Positive", paste0(round(1 - specificity(models[[model.name]]), 4) * 100, "%"), icon = icon("dashboard"), color = "green", fill = TRUE
+		valueBox(
+			paste0(round(1 - specificity(models[[model.name]]), 4) * 100, "%"), "False Positive", icon = icon("user-plus"), color = "green" #, fill = TRUE
+		)
+	})
+
+	output$modelHealth <- renderInfoBox({
+		# TODO: color/text dynamic
+		models <- existing.models()
+		model.name <- input.model()
+
+		text <- list(label = "Healthy", color = "green")
+		if(models[[model.name]]$summary$model_health == "bad") {
+			text <- list(label = "Unhealthy", color = "red")
+		}
+		valueBox(
+			text$label, "Health", icon = icon("heartbeat"), color = text$color #, fill = TRUE
+		)
+	})
+
+	output$modelReach <- renderInfoBox({
+		models <- existing.models()
+		model.name <- input.model()
+		valueBox(
+			span(models[[model.name]]$summary$reach, span(" / 10", class = "denominator")), "Reach", icon = icon("users"), color = "blue" #, fill = TRUE
+		)
+	})
+
+	output$modelAccuracy <- renderInfoBox({
+		models <- existing.models()
+		model.name <- input.model()
+		valueBox(
+			span(models[[model.name]]$summary$accuracy, span(" / 10", class = "denominator")), "Accuracy", icon = icon("dashboard"), color = "purple" #, fill = TRUE
 		)
 	})
 
@@ -476,49 +535,9 @@ server <- function(input, output) {
 		print(p)
 	}, height = 700, res = 108)
 
-	output$importanceTable <- renderTable({
+	output$importanceTable <- renderDataTable({
 		importance.table(existing.models(), input$model)
-	}, width = "auto", striped=TRUE, align='c')
-
-	output$predictionPlot <- renderPlot({
-		fi <- prepare.fieldinfo(api, paste0("prediction_", remove.model.gen(input.model())), "all")
-		ggplot(fi, aes(x = value, y = count)) + geom_bar(stat = "identity") + labs(x = "Target Prediction", y = "User Count", title = "SegmentML Prediction Distribution")
-	})
-
-	output$sourceDistribution <- renderPlot({
-		parsed.name <- parse.model.name(input.model())
-		if(is.null(parsed.name$source)) {
-			stop("invalid model name")
-		}
-
-		fi <- prepare.fieldinfo(api, input$modelField, parsed.name$source)
-		g <- ggplot(fi, aes(x = value, y = count)) + geom_bar(stat = "identity") + labs(x = input$modelField, title = "FieldInfo Summary (Source)")
-		if(hasPrefix(input$modelField, "aspect")) {
-			g <- g + ylim(0, 1)
-		}
-		return(g)
-	})
-
-	output$targetDistribution <- renderPlot({
-		parsed.name <- parse.model.name(input.model())
-		if(is.null(parsed.name$target)) {
-			stop("invalid model name")
-		}
-
-		fi <- prepare.fieldinfo(api, input$modelField, parsed.name$target)
-		g <- ggplot(fi, aes(x = value, y = count)) + geom_bar(stat = "identity") + labs(x = input$modelField, title = "FieldInfo Summary (Target)")
-		if(hasPrefix(input$modelField, "aspect")) {
-			g <- g + ylim(0, 1)
-		}
-		return(g)
-	})
-
-
-	output$partialDepdencies <- renderPlot({
-		resp <- api$get.segmentml.dependencies(remove.model.gen(input.model()))
-		p <- plot.partial.dependencies(resp) + labs(x = "Value", y = "Dependency", title = "Partial Dependencies")
-		return(p)
-	})
+	}, options = list(pageLength = 10))
 
 	output$buildOutput <- renderUI({
 		model <- build.model()
@@ -543,7 +562,7 @@ server <- function(input, output) {
 		))
 
 		model <- models[[input.model()]]
-		tags$h3(paste0(model$conf$source$name, " → ", model$conf$target$name))
+		tags$span(paste0(model$conf$source$name, " → ", model$conf$target$name))
 	})
 
 	showing.model <- FALSE
