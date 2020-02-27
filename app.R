@@ -64,6 +64,10 @@ ui <- dashboardPage(
 						box(width = 12,
 							tags$div(
 								tags$h2("Model Creation"),
+
+								# custom model name
+								textInput("model_name", "Custom Model Name", value = "", placeholder = "(optional) custom model names may not include the following characters: / \\ :"),
+
 								tags$p("Select an (optional) source segment and a target segment, and click ", tags$strong("Go!"), " to view correlation for those segments"),
 
 								# input for source segment
@@ -106,6 +110,9 @@ ui <- dashboardPage(
 
 								# should we recreate the model weekly?
 								checkboxInput("re_run", "Rebuild the Model Weekly?", value = FALSE),
+
+								# should the model use autotune?
+								checkboxInput("auto_tune", "Auto-Tune?", value = FALSE),
 
 								# tags for insights
 								textInput("tags", "Tags: ", value = ""),
@@ -165,7 +172,7 @@ ui <- dashboardPage(
 												uiOutput("reportOutput"),
 
 												# button to evaluate model to entities
-												actionButton("evaluateModel", "Score Users", icon = icon("users")),
+												actionButton("evaluateModel", "Score Users Once", icon = icon("users")),
 												uiOutput("evaluateOutput"),
 
 												# show model configs
@@ -297,6 +304,10 @@ server <- function(input, output) {
 		if (has.target && has.targetfield) {
 			stop("Cannot specify BOTH target segment AND target field")
 		}
+		
+		if (has.target && input$source == input$target) {
+			stop("The source and target segments cannot be the same")
+		}
 
 		if (nchar(additional) != 0) {
 			 vals <- additional %>% strsplit(",") %>% unlist %>% trimws
@@ -310,15 +321,24 @@ server <- function(input, output) {
 			if (length(vals) >= 1) tags = vals
 		}
 
+		if (grepl(":|/|\\\\", input$model_name)) {
+			stop("Custom model name contains invalid character(s)")
+		}
+
+		if (!input$auto_tune && !input$use_scores && !input$use_content && length(fields) == 0 && length(input$collections) == 0) {
+			stop("Cannot build a model with no features")
+		}
+
 		return(api$post.segment.predictions(
 			target = input$target,
 			source = input$source,
-			targetfield = input$target_field,
 			aspects = input$collections,
 			fields = fields,
 			use_scores = input$use_scores,
 			use_content = input$use_content,
 			build_only = input$build_only,
+			auto_tune = input$auto_tune,
+			model_name = input$model_name,
 			save_segment = input$save_segment,
 			tune_model = input$tune_model,
 			size = input$samplesize,
@@ -344,15 +364,16 @@ server <- function(input, output) {
 			stop(sprintf("model %s has no saved config", input.model()))
 		}
 
-		# we only need to pass in the source/target because
-		# we look up the model in the DB by name - <source_id>::<target_id>
+		# in case there is no custom model name, we pass in the source/target 
+		# to look up the model in the DB by the default name - <source_id>::<target_id>
 		return(api$post.segment.predictions(
+			model_name = model$conf$model_name,
 			target = model$conf$target$id,
 			source = model$conf$source$id,
 			build_only = FALSE,
 			eval_only = TRUE,
 			tags = character(0)
-		))
+			))
 	})
 
 	build.report <- eventReactive(input$buildReport, {
