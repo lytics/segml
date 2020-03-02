@@ -139,7 +139,7 @@ lioapi <- setRefClass("lioapi",
 		get.segment.predictions = function() {
 		  	return(.self$exec("api/segmentml"))
 		},
-		post.segment.predictions = function(target = "", source = "", targetfield = "", aspects = c(), fields = c(), tags = c(), use_scores = TRUE, use_content = TRUE, build_only = FALSE, save_segment = FALSE, size = 5000, eval_only = FALSE, tune_model = FALSE, model_type = "rf", re_run = FALSE) {
+		post.segment.predictions = function(target = "", source = "", targetfield = "", aspects = c(), fields = c(), tags = c(), use_scores = TRUE, use_content = TRUE, build_only = FALSE, auto_tune = FALSE, model_name = "", save_segment = FALSE, size = 5000, eval_only = FALSE, tune_model = FALSE, model_type = "rf", re_run = FALSE) {
 			model_type <- match.arg(model_type, c("rf", "gbm"))
 
 			config <- list(
@@ -148,6 +148,8 @@ lioapi <- setRefClass("lioapi",
 				use_scores = use_scores,
 				use_content = use_content,
 				model_only = build_only,
+				auto_tune = auto_tune,
+				model_name = model_name,
 				num_to_train = size,
 				eval_only = eval_only,
 				tune_model = tune_model,
